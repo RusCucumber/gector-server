@@ -222,6 +222,7 @@ class GecBERTModel(object):
     def postprocess_batch(self, batch, all_probabilities, all_idxs,
                           error_probs):
         all_results = []
+        all_tags = []
         noop_index = self.vocab.get_token_index("$KEEP", "labels")
         for tokens, probabilities, idxs, error_prob in zip(batch,
                                                            all_probabilities,
@@ -229,15 +230,18 @@ class GecBERTModel(object):
                                                            error_probs):
             length = min(len(tokens), self.max_len)
             edits = []
+            tags = []
 
             # skip whole sentences if there no errors
             if max(idxs) == 0:
                 all_results.append(tokens)
+                all_tags.append(tags)
                 continue
 
             # skip whole sentence if probability of correctness is not high
             if error_prob < self.min_error_probability:
                 all_results.append(tokens)
+                all_tags.append(tags)
                 continue
 
             for i in range(length + 1):
@@ -248,18 +252,19 @@ class GecBERTModel(object):
                     token = tokens[i - 1]
                 # skip if there is no error
                 if idxs[i] == noop_index:
+                    tags.append("$KEEP")
                     continue
 
-                sugg_token = self.vocab.get_token_from_index(idxs[i],
-                                                             namespace='labels')
-                action = self.get_token_action(token, i, probabilities[i],
-                                               sugg_token)
+                sugg_token = self.vocab.get_token_from_index(idxs[i], namespace='labels')
+                tags.append(sugg_token)
+                action = self.get_token_action(token, i, probabilities[i], sugg_token)
                 if not action:
                     continue
 
                 edits.append(action)
             all_results.append(get_target_sent_by_edits(tokens, edits))
-        return all_results
+            all_tags.append(tags)
+        return all_results, all_tags
 
     def handle_batch(self, full_batch):
         """
@@ -273,6 +278,8 @@ class GecBERTModel(object):
         pred_ids = [i for i in range(len(full_batch)) if i not in short_ids]
         total_updates = 0
 
+        handle_history = {}
+
         for n_iter in range(self.iterations):
             orig_batch = [final_batch[i] for i in pred_ids]
 
@@ -282,7 +289,7 @@ class GecBERTModel(object):
                 break
             probabilities, idxs, error_probs = self.predict(sequences)
 
-            pred_batch = self.postprocess_batch(orig_batch, probabilities,
+            pred_batch, tags_batch = self.postprocess_batch(orig_batch, probabilities,
                                                 idxs, error_probs)
             if self.log:
                 print(f"Iteration {n_iter + 1}. Predicted {round(100*len(pred_ids)/batch_size, 1)}% of sentences.")
@@ -292,7 +299,13 @@ class GecBERTModel(object):
                                         prev_preds_dict)
             total_updates += cnt
 
+            handle_history[n_iter] = {
+                "orig_batch": orig_batch, # n イテレーション目の原文
+                "pred_batch": pred_batch, # n イテレーション目のGEC結果
+                "tags_batch": tags_batch, # n イテレーション目の操作タグ
+            }
+
             if not pred_ids:
                 break
 
-        return final_batch, total_updates
+        return final_batch, total_updates, handle_history
