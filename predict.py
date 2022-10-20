@@ -44,7 +44,7 @@ def main(args):
                          confidence=args.additional_confidence,
                          del_confidence=args.additional_del_confidence,
                          is_ensemble=args.is_ensemble,
-                         weigths=args.weights)
+                         weights=args.weights)
 
     cnt_corrections = predict_for_file(args.input_file, args.output_file, model,
                                        batch_size=args.batch_size, 
