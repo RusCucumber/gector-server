@@ -137,3 +137,4 @@ dmypy.json
 # resources & samples
 /pretrained
 /samples
+/.vscode
