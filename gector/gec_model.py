@@ -1,5 +1,4 @@
 """Wrapper of AllenNLP model. Fixes errors based on model predictions"""
-import logging
 import os
 import sys
 from time import time
@@ -18,10 +17,6 @@ from gector.seq2labels_model import Seq2Labels
 from gector.tokenizer_indexer import PretrainedBertIndexer
 from utils.helpers import PAD, UNK, get_target_sent_by_edits, START_TOKEN
 from utils.helpers import get_weights_name
-
-logging.getLogger("werkzeug").setLevel(logging.ERROR)
-logger = logging.getLogger(__file__)
-
 
 class GecBERTModel(object):
     def __init__(self, vocab_path=None, model_paths=None,
@@ -278,7 +273,8 @@ class GecBERTModel(object):
         pred_ids = [i for i in range(len(full_batch)) if i not in short_ids]
         total_updates = 0
 
-        handle_history = {}
+        # TODO: バッチサイズと同じ大きさにする
+        handle_history = [{} for _ in range(batch_size)]
 
         for n_iter in range(self.iterations):
             orig_batch = [final_batch[i] for i in pred_ids]
@@ -294,16 +290,18 @@ class GecBERTModel(object):
             if self.log:
                 print(f"Iteration {n_iter + 1}. Predicted {round(100*len(pred_ids)/batch_size, 1)}% of sentences.")
 
+            for i, orig, pred, tags in zip(pred_ids, orig_batch, pred_batch, tags_batch):
+                history = {
+                    "original_token": orig,
+                    "corrected_token": pred,
+                    "transformation_tag": tags
+                }
+                handle_history[i][n_iter] = history
+                
             final_batch, pred_ids, cnt = \
                 self.update_final_batch(final_batch, pred_ids, pred_batch,
                                         prev_preds_dict)
             total_updates += cnt
-
-            handle_history[n_iter] = {
-                "orig_batch": orig_batch, # n イテレーション目の原文
-                "pred_batch": pred_batch, # n イテレーション目のGEC結果
-                "tags_batch": tags_batch, # n イテレーション目の操作タグ
-            }
 
             if not pred_ids:
                 break

@@ -12,12 +12,12 @@ def predict_for_file(input_file, output_file, model, batch_size=32, to_normalize
     for sent in test_data:
         batch.append(sent.split())
         if len(batch) == batch_size:
-            preds, cnt = model.handle_batch(batch)
+            preds, cnt, history = model.handle_batch(batch)
             predictions.extend(preds)
             cnt_corrections += cnt
             batch = []
     if batch:
-        preds, cnt = model.handle_batch(batch)
+        preds, cnt, history = model.handle_batch(batch)
         predictions.extend(preds)
         cnt_corrections += cnt
 
@@ -51,7 +51,6 @@ def main(args):
                                        to_normalize=args.normalize)
     # evaluate with m2 or ERRANT
     print(f"Produced overall corrections: {cnt_corrections}")
-
 
 if __name__ == '__main__':
     # read parameters
