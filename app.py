@@ -1,4 +1,4 @@
-import json, traceback
+import json, traceback, argparse
 from typing import Tuple
 from flask import Flask, jsonify, request
 
@@ -9,27 +9,10 @@ app = Flask(__name__)
 app.config.from_pyfile("resources/config.cfg")
 
 # GECToR 呼び出し処理
-def load_gector(
-    max_len=None, min_len=None, lowercase_tokens=None, iterations=None,
-    special_tokens_fix=None, min_error_probability=None, **kwargs
-) -> GecBERTModel:
-    with open(app.config["DEFAULT_GECTOR_PARAM_PATH"]) as f:
+def load_gector(params_path: str) -> GecBERTModel:
+    with open(params_path) as f: # TODO: fix hard programming
         default_params = json.load(f)
         params = default_params["model_params"]
-
-    if isinstance(max_len, int):
-        params["max_len"] = max_len
-    if isinstance(min_len, int):
-        params["min_len"] = min_len
-    if isinstance(lowercase_tokens, bool):
-        params["lowercase_tokens"] = lowercase_tokens
-    if isinstance(iterations, int):
-        params["iterations"] = iterations
-    if isinstance(special_tokens_fix, bool):
-        params["special_tokens_fix"] = special_tokens_fix
-    if isinstance(min_error_probability, float):
-        params["min_error_probability"] = min_error_probability
-
     model = GecBERTModel(**params)
 
     return model    
@@ -50,12 +33,7 @@ def check_params(params: dict) -> Tuple[list, int, bool, dict]:
     if "to_normalize" in params:
         to_normalize = params["to_normalize"]
 
-    if "model_params" in params:
-        model_params = params["model_params"]
-    else:
-        model_params = {}
-
-    return input_text, batch_size, to_normalize, model_params
+    return input_text, batch_size, to_normalize
 
 def predict(
     model: GecBERTModel, input_text: list, batch_size: int, to_normalize: bool
@@ -104,7 +82,7 @@ def gector():
         params = request.get_json()
 
         try:
-            input_text, batch_size, to_normalize, model_params = check_params(params)
+            input_text, batch_size, to_normalize = check_params(params)
         except IndexError:
             response["error"] = {
                 "msg": "No \"input_text\" Parameter"
@@ -117,7 +95,6 @@ def gector():
             }
 
         try:
-            model = load_gector(**model_params)
             result_lines, history, cnt_corrections = predict(model, input_text, batch_size, to_normalize)
         except Exception as e:
             response["error"] = {
@@ -137,4 +114,39 @@ def gector():
         return jsonify(response)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--params_path", 
+        help="Path to the model parameter json file.", 
+        required=False, 
+        default="resources/default_params.json",
+        type=str
+    )
+    parser.add_argument(
+        "--debug", 
+        help="If true, run flask as a debug mode.",
+        required=False,
+        default=True,
+        type=bool
+    )
+    parser.add_argument(
+        "--host",
+        help="Host of flask app",
+        required=False,
+        default="0.0.0.0",
+        type=str
+    )
+    parser.add_argument(
+        "--port",
+        help="Port number of flask app",
+        required=False,
+        default=5000,
+        type=int
+    )
+
+    args = parser.parse_args()
+
+    # TODO: uwsgi での動作確認
+    model = load_gector(args.params_path)
+    app.run(debug=args.debug, host=args.host, port=args.port)
