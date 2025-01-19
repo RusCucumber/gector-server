@@ -72,6 +72,8 @@ def indiex():
 def gector():
     response = {"status": "NG"}
 
+    model = load_gector("resources/default_params.json")
+
     if request.method == "POST":
         if request.headers["Content-type"] != "application/json":
             response["error"] = {
