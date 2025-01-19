@@ -1,4 +1,6 @@
-import json, traceback, argparse
+import json
+import traceback
+import argparse
 from typing import Tuple
 from flask import Flask, jsonify, request
 
@@ -92,7 +94,7 @@ def gector():
             return jsonify(response)
         except Exception as e:
             response["error"] = {
-                "msg": f"Unexpected Error",
+                "msg": "Unexpected Error",
                 "traceback": traceback.format_exc(e)
             }
 
@@ -100,7 +102,7 @@ def gector():
             result_lines, history, cnt_corrections = predict(model, input_text, batch_size, to_normalize)
         except Exception as e:
             response["error"] = {
-                "msg": f"Unexpected Error",
+                "msg": "Unexpected Error",
                 "traceback": traceback.format_exc(e)
             }
         else:
